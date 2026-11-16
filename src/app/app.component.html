@@ -1,0 +1,21 @@
+<main>
+  <header><p class="eyebrow">SNIP / URL SHORTENER</p><h1>Long URL. Short story.</h1><p>Create a short link, share it, and see how often it gets opened.</p></header>
+  <section aria-labelledby="create-heading" class="card">
+    <h2 id="create-heading">Shorten a link</h2>
+    <form [formGroup]="form" (ngSubmit)="submit()" [attr.aria-busy]="pending()">
+      <label for="url">Original URL</label>
+      <div class="input-row"><input id="url" type="url" formControlName="url" placeholder="https://example.com/a-long-story" autocomplete="url" aria-describedby="url-hint url-error" [attr.aria-invalid]="form.controls.url.touched && form.controls.url.invalid" /><button type="submit" [disabled]="pending()">{{ pending() ? 'Shortening…' : 'Shorten link' }}</button></div>
+      <p id="url-hint" class="muted">Use a full http:// or https:// address.</p>
+      <div id="url-error" role="alert" class="error">@if (form.controls.url.touched && form.controls.url.invalid) { <p>Enter a valid HTTP or HTTPS URL.</p> } @if (submitError()) { <p>{{ submitError() }}</p> }</div>
+    </form>
+    <div role="status" aria-live="polite">@if (result(); as link) { <p class="success">Your short link is ready: <a [href]="link.shortUrl" target="_blank" rel="noopener noreferrer">{{ link.shortUrl }}</a></p> }</div>
+  </section>
+  <section class="card" aria-labelledby="links-heading" [attr.aria-busy]="loading()">
+    <div class="section-heading"><h2 id="links-heading">Your links</h2><button class="secondary" type="button" (click)="refresh()" [disabled]="loading()">Refresh hits</button></div>
+    <div role="status" aria-live="polite">@if (loading()) { <p>Loading links…</p> }</div>
+    @if (listError()) { <p role="alert" class="error">{{ listError() }} Use Refresh hits to retry.</p> }
+    @if (!loading() && !listError() && links().length === 0) { <p class="muted">No links yet. Shorten your first URL above.</p> }
+    @if (links().length) { <div class="table-scroll" tabindex="0" role="region" aria-label="Links table; scroll horizontally on small screens"><table><caption class="sr-only">Short links, original URLs, and total hits</caption><thead><tr><th scope="col">Short link</th><th scope="col">Original URL</th><th scope="col">Hits</th></tr></thead><tbody>@for (link of links(); track link.code) { <tr><td><a [href]="link.shortUrl" target="_blank" rel="noopener noreferrer">{{ link.code }}</a></td><td class="original">{{ link.url }}</td><td>{{ link.hits }}</td></tr> }</tbody></table></div> }
+    <p class="muted footnote">Refresh to update hit counts. Links clear when the server restarts.</p>
+  </section>
+</main>
