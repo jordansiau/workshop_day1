@@ -1,0 +1,67 @@
+name: Build bundle
+# No push trigger: this file lives on main, not the component branches.
+# Hourly dispatch is owned by OpenBot, where the user can inspect/stop it.
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: snip-main-writer
+  cancel-in-progress: false
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      changed: ${{ steps.build.outputs.changed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          submodules: true
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.4'
+      - name: Git identity
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Resolve source tips and run source tests
+        run: |
+          git submodule update --init --remote backend frontend cli
+          (cd backend && bun test)
+          (cd cli && node --test)
+          npm ci --prefix frontend --no-fund --no-audit
+          npm test --prefix frontend -- --watch=false --browsers=ChromeHeadless
+      - name: Dependency security gate
+        run: npm audit --prefix frontend --omit=dev --audit-level=high
+      - name: Build, verify repeatability and push
+        id: build
+        run: |
+          before=$(git rev-parse HEAD:bundle)
+          node scripts/build-bundle.mjs
+          main_before=$(git rev-parse HEAD)
+          bundle_before=$(git -C bundle rev-parse HEAD)
+          node scripts/build-bundle.mjs
+          test "$main_before" = "$(git rev-parse HEAD)"
+          test "$bundle_before" = "$(git -C bundle rev-parse HEAD)"
+          node scripts/build-bundle.mjs --push
+          after=$(git rev-parse HEAD:bundle)
+          if [ "$before" != "$after" ]; then echo 'changed=true' >> "$GITHUB_OUTPUT"; fi
+  dispatch-image:
+    needs: bundle
+    if: needs.bundle.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # GITHUB_TOKEN pushes do not start push workflows; explicitly dispatch.
+      - name: Dispatch verified image workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run docker.yml --ref main

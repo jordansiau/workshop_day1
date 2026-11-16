@@ -1,0 +1,106 @@
+name: Build and push image
+on:
+  push:
+    branches: [main]
+    # bundle is the gitlink, not files inside the release submodule.
+    paths: [bundle, .github/workflows/docker.yml]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: snip-image-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.4'
+      - name: Verify pinned release sources
+        run: node scripts/verify-release.mjs
+      - name: Backend and CLI tests
+        run: |
+          (cd backend && bun test)
+          (cd cli && node --test)
+      - name: Frontend tests and production build
+        run: |
+          npm ci --prefix frontend --no-fund --no-audit
+          npm test --prefix frontend -- --watch=false --browsers=ChromeHeadless
+          npm run build --prefix frontend -- --configuration production
+          diff -r frontend/dist/snip-frontend/browser bundle/public
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./bundle
+          file: ./bundle/Dockerfile
+          load: true
+          tags: snip:verified
+          provenance: false
+      - name: Smoke test the exact image before publication
+        run: |
+          docker run -d --name snip-test -p 127.0.0.1:3312:3000 -e BASE_URL=http://127.0.0.1:3312 snip:verified
+          SNIP_API=http://127.0.0.1:3312 node scripts/smoke.mjs
+          docker inspect --format='{{.Config.User}}' snip-test | grep '^bun$'
+      - name: Container vulnerability gate
+        if: ${{ !cancelled() }}
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          image-ref: snip:verified
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: false
+      - name: Dependency security gate
+        if: ${{ !cancelled() }}
+        run: npm audit --prefix frontend --omit=dev --audit-level=high
+      - name: Container logs and cleanup
+        if: always()
+        run: |
+          docker logs snip-test || true
+          docker rm -f snip-test || true
+      - name: Export the tested image
+        run: docker save snip:verified -o snip-image.tar
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-image
+          path: snip-image.tar
+          retention-days: 1
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-image
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+      - name: Publish the tested image without rebuilding
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          docker load -i snip-image.tar
+          while IFS= read -r tag; do
+            docker tag snip:verified "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"
