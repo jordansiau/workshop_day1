@@ -1,0 +1,9 @@
+{
+  "name": "snip-cli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zero-dependency Snip command line client",
+  "bin": { "snip": "./cli.js" },
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=20" }
+}
