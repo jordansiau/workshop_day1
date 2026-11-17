@@ -81,6 +81,12 @@ jobs:
       contents: read
       packages: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: verified-image
@@ -105,3 +111,22 @@ jobs:
             docker tag snip:verified "$tag"
             docker push "$tag"
           done <<< "$TAGS"
+      - name: Pull and verify the published release
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          release_tag=$(printf '%s\n' "$TAGS" | grep ':sha-' | head -n 1)
+          test -n "$release_tag"
+          tested_id=$(docker image inspect snip:verified --format='{{.Id}}')
+          docker image rm "$release_tag"
+          docker pull "$release_tag"
+          test "$tested_id" = "$(docker image inspect "$release_tag" --format='{{.Id}}')"
+          docker image inspect "$release_tag" --format='Published digests: {{json .RepoDigests}}'
+          docker run -d --name snip-published -p 127.0.0.1:3312:3000 -e BASE_URL=http://127.0.0.1:3312 "$release_tag"
+          docker cp snip-published:/app/cli.js "$RUNNER_TEMP/released-cli.cjs"
+          SNIP_API=http://127.0.0.1:3312 node scripts/smoke.mjs "$RUNNER_TEMP/released-cli.cjs"
+      - name: Published container cleanup
+        if: always()
+        run: |
+          docker logs snip-published || true
+          docker rm -f snip-published || true
