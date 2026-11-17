@@ -1,7 +1,7 @@
 {
   "sources": {
     "backend": "03366e06ecb39f06b52886cf6cde917971ae856b",
-    "frontend": "23f02c56688d5f0f9d0a51907cba1d1b1bdc446e",
+    "frontend": "e262a5d53bb5cdae2e1465d5a3f0fcfbb665d95c",
     "cli": "ecec4a5a9d08303436b8458dd0e30e632d889e19"
   },
   "baseImage": "oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a"
