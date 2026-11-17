@@ -38,7 +38,8 @@ jobs:
           npm ci --prefix frontend --no-fund --no-audit
           npm test --prefix frontend -- --watch=false --browsers=ChromeHeadless
       - name: Dependency security gate
-        run: npm audit --prefix frontend --omit=dev --audit-level=high
+        # Build tools execute in CI too; include development dependencies.
+        run: npm audit --prefix frontend --audit-level=high
       - name: Build, verify repeatability and push
         id: build
         run: |

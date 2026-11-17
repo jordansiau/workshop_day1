@@ -60,7 +60,8 @@ jobs:
           ignore-unfixed: false
       - name: Dependency security gate
         if: ${{ !cancelled() }}
-        run: npm audit --prefix frontend --omit=dev --audit-level=high
+        # Build tools execute in CI too; include development dependencies.
+        run: npm audit --prefix frontend --audit-level=high
       - name: Container logs and cleanup
         if: always()
         run: |
