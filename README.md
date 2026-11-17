@@ -1,6 +1,6 @@
 # Snip
 
-One in-memory Bun backend, two clients: an Angular 19 web app and a zero-dependency Node CommonJS CLI. Restarting the server clears links.
+One in-memory Bun backend, two clients: an Angular 21 web app and a zero-dependency Node CommonJS CLI. Restarting the server clears links.
 
 | Request | Result |
 | --- | --- |
@@ -21,7 +21,7 @@ A plain clone leaves submodules empty; populate them with `git submodule update 
 
 ## Development
 
-Run `bun start` in backend, `npm ci` then `npm start` in frontend, and `node cli.js help` in cli. Node 20+ is required (CI uses Node 24). Bun 1.4.4 is used for verification.
+Run `bun start` in backend, `npm ci` then `npm start` in frontend, and `node cli.js help` in cli. The frontend requires Node ^20.19.0, ^22.12.0 or ^24.0.0 (CI uses Node 24); the CLI requires Node 20+. Bun 1.4.4 is used for verification.
 
 Frontend development defaults to http://localhost:3000. Another local service currently uses IPv6 localhost:3000; use an explicit IPv4 API override or a common alternate port when integrating. The production frontend uses same-origin `/api`.
 
@@ -65,4 +65,4 @@ The image runs as the unprivileged `bun` user, exposes port 3000, honors PORT, a
 
 `docker.yml` runs on main pushes touching the bundle gitlink or its own workflow, and manual dispatch. It checks pinned release provenance, reruns backend/CLI/frontend tests, compares rebuilt frontend assets, builds the image, smoke-tests it, and scans both container and all frontend dependencies, including build tools. HIGH/CRITICAL findings fail closed. Only a separate successful publish job receives `packages: write` and GHCR credentials; it loads and publishes the exact tested image without rebuilding.
 
-Intended successful image tags: `ghcr.io/jordansiau/workshop_day1:latest` and `sha-<main-short-sha>`. A tag is not a release until verification and publication actually succeed. Action versions and the Bun Alpine base are pinned by immutable hashes. Angular 19 currently has known high-severity dependency findings, so publication remains blocked pending an approved source upgrade.
+Image tags after successful publication: `ghcr.io/jordansiau/workshop_day1:latest` and `sha-<main-short-sha>`. A tag is not a release until verification and publication actually succeed. Action versions and the Bun Alpine base are pinned by immutable hashes. The approved Angular 21 upgrade replaces the tutorial's Angular 19 requirement to remediate high/critical findings. Production dependencies audit clean; moderate development-tool findings remain documented in frontend/README.md. The HIGH/CRITICAL gates remain enforced on every release.
